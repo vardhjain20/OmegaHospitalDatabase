@@ -1,6 +1,6 @@
 ﻿**HMP 669.001**
 
-**OMEGA HOSPITAL DATABSE Project**
+**OMEGA HOSPITAL DATABASE Project**
 
 #####
 #####
