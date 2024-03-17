@@ -96,10 +96,6 @@ Your report should not exceed 5 pages (the page limit does not include Appendix 
 1) Copies of your output from Access and R/Excel, including in any combination of the following: lists, graphs, tables, figures, charts.  Refer to (3) above in deciding how to display your output. Summaries/overviews of the results should appear in the body of the report, with details appearing in the Appendix. You are encouraged to submit your .Rmd files in the appendix
 
 
-
-
-Include the UMID numbers and names for each group member on your report.  Only one copy of the report, along with appropriate accompanying files (e.g., .accdb, .Rmd, .html, .xlsx etc.)  should be submitted electronically for each group. Every student will also be required to submit an anonymous peer review form to ensure team-members have contributed in a fair manner. 
-
 Some tips to writing a good report:
 
 - **Know the audience:**
