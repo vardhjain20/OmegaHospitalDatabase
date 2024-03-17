@@ -1,4 +1,4 @@
-﻿**HMP 669.001**
+﻿**HMP 669 (Database Management in Healthcare)**
 
 **OMEGA HOSPITAL DATABASE Project**
 
