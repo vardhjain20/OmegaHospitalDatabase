@@ -1,7 +1,7 @@
 ﻿**HMP 669.001**
 
-**Group Project**
-##### **Due: 4/23/2023 at 11:59 pm EST**
+**OMEGA HOSPITAL DATABSE Project**
+
 #####
 #####
 
@@ -133,7 +133,7 @@ Some tips to writing a good report:
 **FAQs:**
 
 
-This is **not** a homework assignment. You are helping a client make sense of this messy DB, so approach the problem that way. Though not required, you are welcome/encouraged to use external sources for supplementing information given to you.
+You are helping a client make sense of this messy DB, so approach the problem that way. Though not required, you are welcome/encouraged to use external sources for supplementing information given to you.
 
 
 - **The tables have duplicate entries, values which are missing/null, confusing field names …** 
@@ -141,7 +141,6 @@ This is **not** a homework assignment. You are helping a client make sense of th
 The DB is, by design, chaotic and messy. You will be expected to make several decisions yourself, and you are welcome to explain your choices made in your report. 
 
 
-- **Can we do the analysis in MS Excel, or can we do it all in R, instead of in SQL?**
 
 You have complete discretion in your choice of platform. We will look at only the final report (or the RMD file to be knitted into the report). 
 
