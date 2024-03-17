@@ -1,0 +1,124 @@
+---
+title: "HMP 669 Final Project"
+output: html_document
+date: "2023-04-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+library(dplyr)
+library(ggplot2)
+library(plyr)
+library(tidyr)
+library(reshape2)
+
+
+```
+
+```{r}
+omega_filtered <- read.csv('OMEGA_filtered.csv', header=T)
+omega <- read.csv('OMEGA.csv', header = T)
+```
+
+```{r}
+
+
+# grouping of distances for selected services including Ortho and cardio
+
+omega$Distance.interval <- cut(omega$DISTANCE, 
+                               breaks = c(0, 50, 150, 400, 600, 800, 1000, 1500, 2000, 3000, 5000, 7000, 70000), labels = c("0-50","51-150", "151-400", "401-600", "601-800", "801-1000", "1001-1500", "1501-2000", "2001-3000", "3001-5000", "5001-7000", "7001-70000"))
+
+omega$Distance.interval <- as.factor(omega$Distance.interval)
+
+distance_traveled_omega <- omega %>% filter(Distance.interval != "7001-70000") %>% filter(Distance.interval != "401-600") %>%  filter(MAJ_DX_CAT != '**') %>% filter(MAJ_DX_CAT == '15' | MAJ_DX_CAT == '14' | MAJ_DX_CAT == '05' | MAJ_DX_CAT == '08' | MAJ_DX_CAT == '06' ) %>% mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "08" = "08 - Orthopedics")) %>% mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "05" = "05 - Cardiology")) %>% mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "06" = "06 - Gastroenterology")) %>% mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "14" = "14 - Obstetrics")) %>% mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "15" = "15 - Perinatology"))%>% group_by(Distance.interval, MAJ_DX_CAT) %>% dplyr::summarise(pt.count = n())
+
+arrange(distance_traveled_omega, MAJ_DX_CAT)
+distance_traveled_omega_final = distance_traveled_omega %>% mutate(Interest_Group = case_when(MAJ_DX_CAT == "05 - Cardiology" ~ "05 - Cardiology", MAJ_DX_CAT == "08 - Orthopedics" ~ "08 - Orthopedics", TRUE ~ "Others"))
+
+distance_percent <- distance_traveled_omega_final %>% arrange(MAJ_DX_CAT) %>% group_by(MAJ_DX_CAT) %>% 
+  dplyr::mutate(total = sum(pt.count), percentage = round((pt.count/total), digits = 2))
+
+ggplot(data = distance_percent, aes(x = MAJ_DX_CAT, y = percentage, fill=Interest_Group, label=scales::percent(percentage))) +
+geom_bar(stat = 'identity', position = 'dodge') +
+labs(x = "Distance Traveled", y = "Percentage of Patients", title = "Distance Traveled by Cardiology and Orthopedic Patients vs Other Services", fill = "Major Diagnosis Category") +
+facet_wrap(~ Distance.interval, ncol = 3) +
+theme_minimal() +
+theme(plot.background = element_rect(color = "black", size = 0.5)) +
+theme(plot.title = element_text(size = 10)) +
+theme(axis.text.x = element_text(size = 7, angle = 90, vjust = 0.4, hjust=0.4)) + geom_text(position = position_dodge(width = .9), vjust = -0.5, size = 3) + scale_y_continuous(labels = scales::percent)
+
+
+```
+
+```{r}
+# calculating the percentage of teaching vs non-teaching cases across selected services including ortho and cardio. 
+teaching_omega <- omega %>% filter(MAJ_DX_CAT != '**') %>% filter(MAJ_DX_CAT == '15' | MAJ_DX_CAT == '14' | MAJ_DX_CAT == '05' | MAJ_DX_CAT == '08' | MAJ_DX_CAT == '06' ) %>% mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "08" = "08 - Orthopedics")) %>% mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "05" = "05 - Cardiology")) %>% mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "06" = "06 - Gastroenterology")) %>% mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "14" = "14 - Obstetrics")) %>% mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "15" = "15 - Perinatology")) %>% mutate(has_teaching = if_else(TEACH_SVC == "TEACHING", 1, 0)) %>% group_by(MAJ_DX_CAT) %>%
+  dplyr::summarise(pt.count = sum(has_teaching), total= n()) %>% mutate(percentage = round((pt.count/total), digits = 2)) %>% arrange(desc(percentage))
+
+teaching_percent_omega <- teaching_omega %>% arrange(MAJ_DX_CAT) %>% group_by(MAJ_DX_CAT) %>% mutate(Interest_Group = case_when(MAJ_DX_CAT == "05 - Cardiology" ~ "05 - Cardiology", MAJ_DX_CAT == "08 - Orthopedics" ~ "08 - Orthopedics", TRUE ~ "Others"))
+
+
+ggplot(data= teaching_percent_omega, mapping = aes(x=reorder(MAJ_DX_CAT, percentage), y=percentage, fill=Interest_Group, label=scales::percent(percentage))) +
+  geom_bar(stat='identity', position='dodge') + labs(x="Major Diagnosis Category", y="Percentage of Cases", title = "Teaching Designation for Cardiology and Orthopedics vs Other Services", fill="Major Diagnosis Category") + 
+  theme_minimal() + theme( plot.background = element_rect(color = "black", size = 0.5)) + theme(plot.title=element_text(size=10)) + geom_text(position = position_dodge(width = .9), vjust = -0.5, size = 3) + scale_y_continuous(labels = scales::percent) + theme(axis.text.x = element_text(angle = -45, vjust = 0.6, hjust=0.3))
+
+
+
+```
+
+```{r}
+#Determining the admission type with number of patients of Cardio from omega_filtered
+omega_filtered$MAJ_DX_CAT <- as.factor(omega_filtered$MAJ_DX_CAT)
+class(omega_filtered$MAJ_DX_CAT)
+
+admission_info_cardio <- omega_filtered %>% filter(MAJ_DX_CAT == '5') %>% filter(ADM_TYPE != "0")%>% group_by( ADM_TYPE, MAJ_DX_CAT, ADM_SOURCE_DESC, ADM_SVC_DESC) %>%
+  dplyr::summarise(Number_of_admissions = length(PAT_NO))
+admission_info_cardio
+```
+
+```{r}
+#Determining the admission type with number of patients of Ortho from omega_filtered
+admission_info_ortho <- omega_filtered %>% filter(MAJ_DX_CAT == '8') %>% filter(ADM_TYPE != "0")%>% group_by( ADM_TYPE, MAJ_DX_CAT, ADM_SOURCE_DESC, ADM_SVC_DESC) %>%
+  dplyr::summarise(Number_of_admissions = length(PAT_NO))
+admission_info_ortho
+```
+
+```{r}
+#Determining emergent vs elective percentage of admissions for cardio and ortho from omega_filtered
+adm_type_count<- omega_filtered %>% filter(ADM_TYPE!= "0") %>% group_by(ADM_TYPE, MAJ_DX_CAT) %>% 
+  dplyr::summarise(pt.count = n()) 
+
+arrange(adm_type_count, MAJ_DX_CAT)
+  
+adm_type_percent_omega_filtered <- adm_type_count %>% arrange(MAJ_DX_CAT) %>%  group_by(MAJ_DX_CAT) %>% 
+  dplyr::mutate(total = sum(pt.count), percentage = round((pt.count/total), digits = 2))
+
+
+
+ggplot(adm_type_percent_omega_filtered, mapping = aes(x=ADM_TYPE, y=percentage, fill=MAJ_DX_CAT, label=scales::percent(percentage))) + geom_bar(stat='identity', position='dodge') + labs(x="Admission Type", y="Percentage of Cases", title = "Admission Type of Cardiology and Orthopedics", fill="Major Diagnosis Category") + scale_fill_discrete(labels = c("05 - Cardiology", "08 - Orthopedics")) + theme_minimal() + theme( plot.background = element_rect(color = "black", size = 0.5)) + theme(plot.title=element_text(size=13)) + geom_text(position = position_dodge(width = .9), vjust = -0.5, size = 3) + scale_y_continuous(labels = scales::percent)
+```
+
+```{r}
+#Determining percent of Medical and Procedural cases of ER admissions
+er_admissions <- omega_filtered %>% filter(ADM_TYPE == "EMERGENT") %>% group_by(MAJ_DX_CAT, PARTITION) %>% dplyr::summarise(pt.count = n())
+
+er_admissions_percentage <- er_admissions %>% arrange(MAJ_DX_CAT) %>% group_by(MAJ_DX_CAT) %>% 
+  dplyr::mutate(total = sum(pt.count), percentage = round((pt.count/total), digits = 2))
+
+
+ggplot(data= er_admissions_percentage, mapping = aes(x=PARTITION, y=percentage, fill=MAJ_DX_CAT, label=scales::percent(percentage))) +
+  geom_bar(stat='identity', position='dodge') + labs(x="Medical and Procedural Designation", y="Percentage of Cases", title = "Medical and Procedural Cases of ER Admissions for Cardiology and Orthopedics", fill="Major Diagnosis Category") + scale_fill_discrete(labels = c("05 - Cardiology", "08 - Orthopedics")) +
+  theme_minimal() + theme( plot.background = element_rect(color = "black", size = 0.5)) + theme(plot.title=element_text(size=12)) + geom_text(position = position_dodge(width = .9), vjust = -0.5, size = 3) + scale_y_continuous(labels = scales::percent)
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

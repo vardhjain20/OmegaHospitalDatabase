@@ -1,0 +1,509 @@
+---
+title: "HMP_FinalProject_II"
+author: "Vardh Jain"
+date: "2023-04-04"
+output: html_document
+editor_options: 
+chunk_output_type: inline
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(readxl)
+library(knitr)
+library(gridExtra)
+library(stringr)
+```
+
+```{r echo=TRUE}
+#Loading datasets
+og_omega_drg = read_csv('Original OMEGA+DRG.csv')
+omega_c_o = read_csv('OMEGA_filtered.csv')
+crit = read_csv('CRIT_CSV_MAJDX.csv')
+colnames(crit)[2] = "MAJ_DX_CAT"
+crit_other_services = read_xlsx('CRIT2_MAJDX.xlsx')
+colnames(crit_other_services)[2] = "MAJ_DX_CAT"
+omega_px_filtered = read_csv('OME_PX_filtered.csv')
+drg_og = read_xlsx('DRG_original.xlsx')
+omega_other_services = read_csv('OMEGA_other_services.csv')
+
+```
+
+
+
+Percent of visits requiring an external review
+
+```{r echo=TRUE}
+
+#total_visits = length(omega_c_o$PAT_NO)
+
+percent_ext_rev_c_o = og_omega_drg %>%
+  filter(MAJ_DX_CAT != '**') %>% 
+  mutate(has_ext_rev = if_else(EXT_REV == 0, 0, EXT_REV)) %>%
+  group_by(MAJ_DX_CAT) %>% 
+  summarise(total_ext_rev = sum(has_ext_rev), total_records = n()) %>% 
+  mutate(percent = (total_ext_rev/total_records)*100) %>% 
+  arrange(desc(percent)) %>% 
+  filter(MAJ_DX_CAT == "05" | MAJ_DX_CAT == "08"| row_number() <= 9) %>% 
+  mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "05" = "Cardiology", "08" = "Orthopedics",
+                            "20" = "SubstanceUse", "17" = "BloodCancers",
+                            "10" = "Endocrinology", "16" = "Hematology",
+                            "01" = "Neurology", "06" = "Gastroenterology", "21" = "Toxicology")) %>% 
+  mutate(Interest_Group = case_when(MAJ_DX_CAT == 'Cardiology' ~ 'Cardiology',
+                                    MAJ_DX_CAT == 'Orthopedics' ~ 'Orthopedics',
+                                    TRUE ~ 'Others')) 
+
+percent_ext_rev_c_o %>% kable()
+
+#Plot
+percent_ext_rev_c_o %>% 
+  ggplot() +
+  aes(x = reorder(MAJ_DX_CAT, percent), y = percent, fill = Interest_Group) +
+  geom_bar(stat = 'identity') +
+  coord_flip() + 
+  labs(title = "Percentage of Visits Requiring External Review by Diagnosis Group",
+       x = "Major Diagnosis Category",
+       y = "Percentage of Visits with External Review") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.background = element_rect(color = "black", size = 0.5)) +
+  geom_text(aes(label = round(percent, digits = 2)), hjust = -0.2, size = 3)
+
+```
+
+
+ICU/CCU information
+
+```{r echo=TRUE}
+# Was a stay in the ICU required
+
+icu_stay_c_o = omega_c_o %>% 
+  group_by(MAJ_DX_CAT) %>% 
+  mutate(has_icu_stay = if_else(CCSTAY == 'Yes', 1, 0)) %>%
+  summarise(total_icu_stays_card_ortho = sum(has_icu_stay),
+            no_of_pts = n()) %>% 
+  mutate(percentage_icu_co = (total_icu_stays_card_ortho/no_of_pts)*100) %>% 
+  arrange(desc(percentage_icu_co)) %>% 
+  mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "05" = "Cardiology", "08" = "Orthopedics"))
+
+icu_stay_c_o %>% kable()
+
+# Plot
+icu_stay_c_o %>% 
+  ggplot() + 
+  aes(x = reorder(MAJ_DX_CAT, percentage_icu_co), y = percentage_icu_co, fill = MAJ_DX_CAT) +
+  geom_bar(stat = "identity") +
+  labs(title = "Percentage of ICU Stays for Cardiology and Orthopedics",
+       x = "Major Diagnosis Category",
+       y = "Percentage of ICU Stays") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  geom_text(aes(label = round(percentage_icu_co, digits = 2)), vjust = 1.3, size = 3.5)
+```
+
+Interpretation: 
+Cardiology presents a very high admission rate of 26% in the ICU as compared to only a 2% rate for Orthopedics. These results can be a combination of two parameters: 1. Cardiac diseases are more prevalent and tend to have higher chances of complications when compared to Orthopedic diseases. 2. The orthopedics department provides a better standard of care.
+
+
+```{r echo=TRUE}
+#Used in report
+
+#ICU stays cardiac and ortho versus all
+
+#total_visits = length(omega_c_o$PAT_NO)
+
+icu_stay_all = og_omega_drg %>% 
+  filter(MAJ_DX_CAT != '**') %>%
+  group_by(MAJ_DX_CAT) %>% 
+  mutate(has_icu_stay = if_else(CCSTAY == '1', 1, 0)) %>%
+  summarise(total_icu_stays_all = sum(has_icu_stay),
+            no_of_pts = n()) %>% 
+  mutate(percentage_icu_all = (total_icu_stays_all/no_of_pts)*100) %>% 
+  arrange(desc(percentage_icu_all)) %>% 
+  filter(MAJ_DX_CAT == "05" | MAJ_DX_CAT == "08"| row_number() <= 15) %>% 
+  mutate(MAJ_DX_CAT = recode(MAJ_DX_CAT, "05" = "05 - Cardiology", "08" = "08 - Orthopedics",
+                             "24" = "24 - Trauma", "22" = "22 - Burns",
+                             "25" = "25 - HIV", "15" = "15 - Perinatology",
+                             "01" = "01 - Neurology", "21" = "21- Toxicology",
+                             "18" = "18 - InfectiousDiseases", "04" = "04 - Pulmonology",
+                             "06" = "06 - Gastroenterology", "02" = "02 - Opthalmology",
+                             "07" = "07 - Hepatology", "10" = "10 - Endocrinology",
+                             "16" = "16 - Hematology", "11" = "11 - Urology")) %>% 
+  mutate(Interest_Group = case_when(MAJ_DX_CAT == '05 - Cardiology' ~ 'Cardiology',
+                                    MAJ_DX_CAT == '08 - Orthopedics' ~ 'Orthopedics',
+                                    TRUE ~ 'Others')) 
+
+icu_stay_all %>% kable()
+
+# Plot
+icu_stay_all %>% 
+  ggplot() + 
+  aes(x = reorder(MAJ_DX_CAT, percentage_icu_all), y = percentage_icu_all, fill = Interest_Group) +
+  geom_bar(stat = "identity") +
+  coord_flip() + 
+  labs(title = "Percentage of ICU Stays for Cardiology and Orthopedics",
+       x = "Major Diagnosis Category",
+       y = "Percentage of ICU Stays") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.background = element_rect(color = "black", size = 0.5)) +
+        #panel.grid.major = element_blank(),
+        #panel.grid.minor = element_blank(),
+        #panel.background = element_blank(),) +
+  geom_text(aes(label = round(percentage_icu_all, digits = 1)), hjust = -0.5, size = 2.5)
+```
+
+
+
+```{r include=FALSE}
+# percent distribution of patients in Cardiac group by LOS in CCUs
+
+crit_omega_cardiac = crit %>%
+  filter(MAJ_DX_CAT == '5') %>% 
+  group_by(MAJ_DX_CAT, ICU_LOS) %>% 
+  summarize(count_patients = n()) %>% 
+  ungroup() %>% 
+  group_by(MAJ_DX_CAT) %>%
+  mutate(total_patients = sum(count_patients),
+         percent = (count_patients / total_patients) * 100) %>% 
+  filter(ICU_LOS <=20)
+
+kable(crit_omega_cardiac)
+
+# Create a bar plot for Cardiac patients
+ggplot(crit_omega_cardiac, aes(x = ICU_LOS, y = percent)) +
+  geom_bar(stat = 'identity', fill = "steelblue", width = 0.7) +
+  labs(title = "Percent Distribution of Cardiac Patients by LOS in CCUs",
+       x = "Length of Stay (Days)",
+       y = "Percentage") +
+  theme_minimal()
+```
+
+
+```{r include=FALSE}
+## percent distribution of patients in Ortho group by LOS in CCUs
+
+crit_omega_ortho = crit %>%
+  filter(MAJ_DX_CAT == '8') %>% 
+  group_by(MAJ_DX_CAT, ICU_LOS) %>% 
+  summarize(count_patients = n()) %>% 
+  ungroup() %>% 
+  group_by(MAJ_DX_CAT) %>%
+  mutate(total_patients = sum(count_patients),
+         percent = (count_patients / total_patients) * 100) %>% 
+    filter(ICU_LOS <=20)
+
+kable(crit_omega_ortho)
+
+#Plot
+ggplot(crit_omega_ortho, aes(x = ICU_LOS, y = percent)) +
+  geom_bar(stat = 'identity', fill = "steelblue", width = 0.7) +
+  labs(title = "Percent Distribution of Orthopedic Patients by LOS in CCUs",
+       x = "Length of Stay (Days)",
+       y = "Percentage") +
+  theme_minimal()
+```
+
+
+```{r}
+#Used in report
+
+# Percent distribution of patients in both groups by LOS in CCUs
+combined_data = rbind(crit_omega_cardiac, crit_omega_ortho)
+
+kable(combined_data)
+
+# Create a bar plot for Cardiac and Ortho patients
+ggplot(combined_data, aes(x = ICU_LOS, y = percent, fill = factor(MAJ_DX_CAT))) +
+  geom_bar(stat = 'identity', position = 'dodge', width = 0.7) +
+  labs(title = "Percent Distribution of Cardiology and Orthopedics Patients by LOS in CCUs",
+       x = "Length of Stay (Days)",
+       y = "Percentage",
+       fill = "Major Diagnosis Category") +
+  scale_fill_discrete(labels = c("05 - Cardiology", "08 - Orthopedics")) +
+  theme_minimal() +
+  theme(plot.background = element_rect(color = "black", size = 0.5))
+
+```
+
+
+```{r echo=TRUE}
+# type of ICU where care was received(cardiac)
+
+ccu_type_cardiac = crit %>% 
+  filter(MAJ_DX_CAT == 5) %>%
+  group_by(ICU) %>% 
+  summarize(patients_in_ccu = n()) %>% 
+  arrange(patients_in_ccu) %>% 
+  mutate(MAJ_DX_CAT = 5)
+
+kable(ccu_type_cardiac)
+
+#Plot
+ccu_type_cardiac %>% 
+  ggplot() + 
+  aes(x = reorder(ICU, patients_in_ccu), y = patients_in_ccu, fill = ICU) +
+  geom_bar(stat = 'identity') +
+  labs(title = 'Cardiac patients in Each type of ICU where care was received',
+       x = 'ICU Type',
+       y = 'Number of Patients') +
+  theme_minimal() +
+  geom_text(aes(label = patients_in_ccu), vjust = 1.5, size = 3.5)  
+```
+
+
+
+```{r echo=TRUE}
+# type of ICU where care was received(ortho)
+ccu_type_ortho = crit %>% 
+  filter(MAJ_DX_CAT == 8) %>%
+  group_by(ICU) %>% 
+  summarize(patients_in_ccu = n()) %>% 
+  arrange(patients_in_ccu) %>% 
+  mutate(MAJ_DX_CAT = 8)
+
+#Plot
+ccu_type_ortho %>% 
+  ggplot() + 
+  aes(x = ICU, y = patients_in_ccu, fill = ICU) +
+  geom_bar(stat = 'identity') +
+  labs(title = 'Orthopedics patients in each type of ICU where care was received',
+       x = 'ICU Type',
+       y = 'Number of Patients') +
+  theme_minimal() +
+  geom_text(aes(label = patients_in_ccu), vjust = 1.5, size = 3.5)   
+```
+
+```{r}
+#Used in report
+
+# type of ICU where care was received for cardiac and ortho
+combined_data_icu = rbind(ccu_type_cardiac, ccu_type_ortho)
+
+# Create a bar plot for Cardiac and Ortho patients
+ggplot(combined_data_icu, aes(x = reorder(ICU, patients_in_ccu), y = patients_in_ccu,
+                              fill = as.factor(MAJ_DX_CAT))) +
+  geom_bar(stat = 'identity', position = 'dodge', width = 0.7) +
+  labs(title = "Number of Cardiology and Orthopedic Patients in ICU Unit Types",
+       x = "ICU Type",
+       y = "Number of Patients",
+       fill = "Major Diagnosis Category") +
+  scale_fill_discrete(labels = c("Cardiology", "Orthopedics")) +
+  theme_minimal()
+  #geom_text(aes(label = patients_in_ccu), vjust = 1.5, hjust = 1.5, size = 3.5)   
+
+```
+
+Interpretation:
+This plot clearly demonstrates that the Cardiology speciality has a much higher number of ICU admits across all three ICU unit types over Orthopedics. The highest admits and transfers are in the Surgical ICU for both specialites indicating the complicated nature of procedures occuring in both specialties. Further, the next highest admissions are in the Critical ICU followed by the Medical ICU in Cardiology whereas this order is reverse for Orthopedics.
+
+
+```{r include=FALSE}
+# ALOS -average length of stay- in each unit-type (cardiac)
+
+avg_los_icu_unit_cardiac = crit %>% 
+  filter(MAJ_DX_CAT == 5) %>% 
+  group_by(ICU) %>%
+  summarize(total_los_unit = sum(ICU_LOS), pts_in_icu_unit = n()) %>%   
+  mutate(avg_los = total_los_unit/pts_in_icu_unit) %>% 
+  arrange(pts_in_icu_unit) %>% 
+  mutate(MAJ_DX_CAT = 5)
+
+kable(avg_los_icu_unit_cardiac)
+
+#Plot
+avg_los_icu_unit_cardiac %>% 
+  ggplot() + 
+  aes(x = reorder(ICU, avg_los), y = avg_los, fill = ICU) +
+  geom_bar(stat = 'identity') +
+  labs(title = "Average Length of Stay in Each ICU Unit for Cardiac Patients",
+       x = "ICU Unit",
+       y = "Average Length of Stay (ALOS)") +
+  theme_minimal()
+```
+
+
+```{r include=FALSE}
+# ALOS -average length of stay- in each unit-type (ortho)
+
+avg_los_icu_unit_ortho = crit %>%
+  filter(MAJ_DX_CAT == 8) %>% 
+  group_by(ICU) %>%
+  summarize(total_los_unit = sum(ICU_LOS), pts_in_icu_unit = n()) %>%   
+  mutate(avg_los =  total_los_unit/pts_in_icu_unit) %>% 
+  arrange(pts_in_icu_unit) %>% 
+  mutate(MAJ_DX_CAT = 8)
+
+kable(avg_los_icu_unit_ortho)
+
+#Plot
+avg_los_icu_unit_ortho %>% 
+  ggplot() + 
+  aes(x = reorder(ICU, avg_los), y = avg_los, fill = ICU) +
+  geom_bar(stat = 'identity') +
+  labs(title = "Average Length of Stay in Each ICU Unit for Orthopedics Patients",
+       x = "ICU Unit",
+       y = "Average Length of Stay (ALOS)") +
+  theme_minimal()
+```
+
+```{r}
+#Used in report
+
+# ALOS -average length of stay- in each unit-type (ortho)
+combined_data_icu = rbind(avg_los_icu_unit_cardiac, avg_los_icu_unit_ortho)
+
+# Create a bar plot for Cardiac and Ortho patients
+ggplot(combined_data_icu, aes(x = reorder(ICU, avg_los), y = avg_los, fill = as.factor(MAJ_DX_CAT))) +
+  geom_bar(stat = 'identity', position = 'dodge', width = 0.7) +
+  labs(title = "Average Length of Stay in each ICU Unit Type",
+       x = "ICU Type",
+       y = "Average Length of Stay in Days",
+       fill = "Major Diagnosis Category") +
+  scale_fill_discrete(labels = c("05 - Cardiology", "08 - Orthopedics")) +
+  theme_minimal() +
+  theme(plot.background = element_rect(color = "black", size = 0.5))
+```
+
+
+
+
+
+Principal operations performed on each group
+
+```{r echo=TRUE}
+##the average number of operations performed in cardiac group
+
+no_pts_operations_cardiac = omega_px_filtered %>% 
+  inner_join(omega_c_o, by = c("PAT_NO", "ADM_DATE", "DIS_DATE")) %>%
+  filter(MAJ_DX_CAT == 5) %>%
+  group_by(PAT_NO) %>% 
+  summarize(operations_each_pt = n()) %>% 
+  summarize(total_pts_having_operations = sum(operations_each_pt),
+            no_pts_with_ops = n_distinct(PAT_NO)) %>% 
+    mutate(avg_no_operations = total_pts_having_operations/no_pts_with_ops)
+```
+
+
+```{r echo=TRUE}
+##the average number of operations performed in ortho group
+no_pts_operations_ortho = omega_px_filtered %>% 
+  inner_join(omega_c_o, by = c("PAT_NO", "ADM_DATE", "DIS_DATE")) %>%
+  filter(MAJ_DX_CAT == 8) %>%
+  group_by(PAT_NO) %>% 
+  summarize(operations_each_pt = n()) %>% 
+  summarize(total_pts_having_operations = sum(operations_each_pt),
+                        no_pts_with_ops = n_distinct(PAT_NO)) %>% 
+  mutate(avg_no_operations = total_pts_having_operations/no_pts_with_ops)
+```
+
+```{r}
+#Used in report
+combined_data = rbind(
+  no_pts_operations_cardiac %>% mutate(group = "05 - Cardiology"),
+  no_pts_operations_ortho %>% mutate(group = "08 - Orthopedics")
+)
+
+kable(combined_data)
+
+# Create a bar plot for Cardiac and Ortho patients
+ggplot(combined_data, aes(x = group, y = total_pts_having_operations, fill = group)) +
+  geom_bar(stat = 'identity', width = 0.7) +
+  labs(title = "Total Number of Operations Performed for Cardiology and Orthopedic Groups",
+       x = "Major Diagnosis Category",
+       y = "Total Number of Operations") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  geom_text(aes(label = total_pts_having_operations), vjust = 1.5, size = 3.5)
+
+
+# Create a bar plot for Cardiac and Ortho patients
+ggplot(combined_data, aes(x = group, y = avg_no_operations, fill = group)) +
+  geom_bar(stat = 'identity', width = 0.7) +
+  labs(title = "Average Number of Operations Performed for Cardiology and Orthopedic Groups",
+       x = "Major Diagnosis Category",
+       y = "Average Number of Operations") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        plot.background = element_rect(color = "black", size = 0.5)) +
+  geom_text(aes(label = round(avg_no_operations, digits = 2)), vjust = -0.2, size = 3.5)
+
+```
+
+
+```{r echo=TRUE}
+#major types of operations performed in cardiac group requiring ICU stay
+
+major_ops_cardiac = omega_c_o %>% 
+  filter(OP_DESC != '#N/A', MAJ_DX_CAT == 5, CCSTAY == 'Yes') %>% 
+  group_by(OP_DESC, CCSTAY) %>%
+  summarize(n = n()) %>%
+  arrange(desc(n)) %>%
+  ungroup() %>% 
+  slice(1:10)
+
+kable(major_ops_cardiac)
+
+#Plot
+plot_cardiac = major_ops_cardiac %>% 
+  ggplot() + 
+  aes(x = reorder(OP_DESC, n), y = n) +
+  geom_bar(stat = "identity", width = 0.75, fill = 'steelblue') +
+  coord_flip() + 
+  labs(title = "Top 10 Major Operations Performed\nin Cardiology Requiring ICU Stays",
+       x = "Operation Description",
+       y = "Number of Operations") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  theme(plot.title.position = "plot",
+        plot.background = element_rect(color = "black", size = 0.5),
+        plot.title = element_text(hjust = 0.2, size = 10),
+        axis.text.y = element_text(size = 8),
+        axis.text.x = element_text(size = 8)) +
+  geom_text(aes(label = n), hjust = 1.25, size = 3, color = 'white', fontface = "bold") +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 15))
+```
+
+```{r echo=TRUE}
+#major types of operations performed in ortho
+
+major_ops_ortho = omega_c_o %>% 
+  filter(OP_DESC != '#N/A', MAJ_DX_CAT == 8, CCSTAY == 'Yes') %>% 
+  group_by(OP_DESC, CCSTAY) %>% 
+  summarize(n = n()) %>% 
+  arrange(desc(n)) %>% 
+  ungroup() %>% 
+  slice(1:10) 
+
+kable(major_ops_ortho)
+
+
+#Plot
+plot_ortho = major_ops_ortho %>% 
+  ggplot() + 
+  aes(x = reorder(OP_DESC, n), y = n) +
+  geom_bar(stat = 'identity', width = 0.75, fill = 'steelblue') +
+  coord_flip() + 
+  labs(title = "Top 10 Major Operations Performed\nin Orthopedics Requiring ICU Stay",
+       x = "Operation Description",
+       y = "Number of Operations") +
+  theme_minimal() +
+  theme(plot.title.position = "plot",
+        plot.background = element_rect(color = "black", size = 0.5),
+        plot.title = element_text(hjust = 0.2, size = 10),
+        axis.text.y = element_text(size = 8),
+        axis.text.x = element_text(size = 8)) +
+  theme(legend.position = "none") +
+  geom_text(aes(label = n), hjust = 1.5, size = 3, color = 'white', fontface = "bold") +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20))
+
+```
+
+```{r}
+#Used in report
+grid.arrange(plot_cardiac, plot_ortho, ncol = 2)
+```
+
+
+

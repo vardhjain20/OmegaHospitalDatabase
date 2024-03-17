@@ -1,0 +1,361 @@
+---
+title: "HMP 669 Project_Demographic section"
+author: "Renee Jia"
+output: html_document
+---
+
+```{r}
+#set up libraries
+library (tidyverse)
+library (ggplot2)
+library (dplyr)
+library (knitr)
+library (readxl)
+library (flextable)
+library(ggpubr)
+```
+
+```{r}
+#read file
+Omega_patient = read.csv("OMEGA_filtered.csv")
+Omega_patient_others = read.csv ("OMEGA_other_services.csv")
+Omega_all = read.csv ("OMEGA_all.csv")
+MDC_List = read.csv ("MDC_List.csv")
+```
+
+
+```{r}
+#create a dataset for distinct patients
+MDC_List$MAJ_DX_CAT <- as.integer(MDC_List$MAJ_DX_CAT)
+Omega_patient$MAJ_DX_CAT <- as.integer(Omega_patient$MAJ_DX_CAT)
+Omega_patient_others$MAJ_DX_CAT <- as.integer(Omega_patient_others$MAJ_DX_CAT)
+Omega_all$MAJ_DX_CAT <- as.integer(Omega_all$MAJ_DX_CAT)
+
+Omega_patient = Omega_patient %>% 
+  left_join(MDC_List) %>% 
+  mutate (Interest_Group = case_when(DRG_DESC == 'Cardiology' ~ 'Cardiology',
+                                     DRG_DESC == 'Orthopedic' ~ 'Orthopedic',
+                                     TRUE ~ 'Others') )
+Omega_patient_others = Omega_patient_others %>% 
+  left_join(MDC_List)%>% 
+  mutate (Interest_Group = case_when(DRG_DESC == 'Cardiology' ~ 'Cardiology',
+                                     DRG_DESC == 'Orthopedic' ~ 'Orthopedic',
+                                     TRUE ~ 'Others') )
+Omega_all = Omega_all %>% 
+  distinct (PAT_NO,  .keep_all = TRUE) %>% 
+  left_join(MDC_List) %>% 
+  mutate (Interest_Group = case_when(DRG_DESC == 'Cardiology' ~ 'Cardiology',
+                                     DRG_DESC == 'Orthopedic' ~ 'Orthopedic',
+                                     TRUE ~ 'Others') )
+
+
+distinct_omega = Omega_patient %>% 
+  distinct(PAT_NO, .keep_all = TRUE) 
+distinct_others = Omega_patient_others %>% 
+  distinct (PAT_NO, .keep_all = TRUE) 
+distinct_all = Omega_all %>% 
+  distinct (PAT_NO,  .keep_all = TRUE) 
+
+```
+
+## Total number of patients addmited to Orthopedic & Cardiac groups
+```{r}
+distinct_omega %>% 
+  select (DRG_DESC) %>% 
+  group_by(DRG_DESC) %>% 
+  summarize("No.Patient"= n()) %>% 
+  mutate ("% Total Patients"= `No.Patient`/(10377+3789)*100) %>% 
+  knitr::kable(digits = 2, caption = "Summary Table") 
+
+distinct_all %>% 
+  group_by(DRG_DESC) %>% 
+  summarize ("No.Patient"= n()) %>% 
+  mutate ("% Total Patients"= `No.Patient`/(10377+3789)*100) %>% 
+  mutate (Interest_Group = case_when(DRG_DESC == 'Cardiology' ~ 'Cardiology',
+                                     DRG_DESC == 'Orthopedic' ~ 'Orthopedic',
+                                     TRUE ~ 'Others')) %>% 
+  arrange (desc(`No.Patient`)) %>% 
+  ggplot() +
+  aes(x = reorder (DRG_DESC, + `% Total Patients`), y = (`% Total Patients`), fill = Interest_Group)+
+  geom_bar(stat = "identity") +
+  labs(x = " ", y=" ",
+       title = "Total number of patients addmited by DRG Group") +
+  coord_flip()+
+  geom_text(aes(label = round(`% Total Patients`, 1)), hjust = 0, size = 2.5)  +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+
+## Demographics of patient groups
+### Age
+#### Cardio vs Orthopedic
+```{r}
+distinct_all %>% 
+  group_by(DRG_DESC) %>% 
+  summarize(min = min(AGE),
+            median = median(AGE),
+            mean = mean (AGE),
+            max = max(AGE)) %>% 
+  arrange (desc(mean)) %>% 
+  mutate (Interest_Group = case_when(DRG_DESC == 'Cardiology' ~ 'Cardiology',
+                                     DRG_DESC == 'Orthopedic' ~ 'Orthopedic',
+                                     TRUE ~ 'Others')) %>% 
+  slice (2:12) %>% 
+  ggplot() +
+  aes (x = reorder(DRG_DESC, +mean), y = mean, fill = as.factor(Interest_Group)) +
+  geom_bar(stat = "identity") +
+  coord_flip() +
+  labs (x = " ", y = "Average Age",
+        title = "Average Age of Each DRG Groups") +
+  geom_text(aes(label = round(mean, 1)), hjust = 0, size = 3)  +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+
+```{r}
+distinct_all %>% 
+  group_by(Interest_Group, SEX) %>% 
+  summarize (mean_age = mean (AGE)) %>% 
+  filter (Interest_Group !="Others") %>% 
+  ggplot () +
+  aes(x=SEX, y = mean_age, fill = Interest_Group) +
+  geom_bar (stat = "identity", position = "dodge") +
+  labs (x = "Gender", y = " ",
+        title = "Average Age by Gender") +
+  guides(fill = guide_legend(title = "DRG Group")) +
+  theme_minimal()
+```
+
+### Race
+#### Cardio vs Orthopedic
+```{r}
+#overall patient by Race
+distinct_all %>% 
+  group_by(RACE) %>% 
+  summarize (n=n()) %>% 
+  mutate (percent = n/sum(n)*100)
+
+#Patient distribution by Race and DRG Group
+distinct_all %>% 
+  group_by (Interest_Group, RACE) %>% 
+  summarize (n.patient = length (Interest_Group)) %>% 
+  mutate (percentage = n.patient/sum(n.patient) * 100) %>% 
+  arrange (desc(percentage)) %>% 
+  ggplot() +
+  aes(x= reorder(RACE, +n.patient), y = percentage, fill = Interest_Group) +
+  geom_bar (stat = "identity", position = "dodge")+
+  coord_cartesian(ylim = c(0, 100))+
+  labs (x = "Race", y = "Percentage",
+        title = "Patient ditribution by Race (%)") +
+  scale_x_discrete(limits = c("AMER_INDIAN", "OTHER", "HISPANIC", "ASIATIC", "BLACK", "WHITE"),
+                   labels = c("American Indian", "Others", "Hispanic", "Asian", "Black", "White")) +
+  guides(fill = guide_legend(title = "DRG Group")) +
+  theme_minimal() 
+```
+
+
+### Gender
+#### Cardio vs Orthopedic
+```{r}
+distinct_all %>% 
+  group_by (Interest_Group, SEX) %>% 
+  summarize (n.patient = length (Interest_Group)) %>% 
+  mutate (percentage = n.patient / sum(n.patient)*100 ) %>% 
+  ggplot() +
+  aes(x=SEX, y = percentage, fill = Interest_Group) +
+  geom_bar (stat = "identity", position = "dodge") +
+  labs (x = "Gender", y = "Percentage",
+        title = "Patient ditribution by Gender (%)") +
+  guides(fill = guide_legend(title = "DRG Group")) +
+  theme_minimal()
+```
+
+
+## Average Length of Stay
+### Cardiac vs Orthopedic
+```{r}
+Omega_all %>% 
+  group_by(DRG_DESC) %>% 
+  summarize(min = min(LOS),
+            median = median(LOS),
+            mean = mean (LOS),
+            max = max(LOS)) %>% 
+  mutate (Interest_Group = case_when(DRG_DESC == 'Cardiology' ~ 'Cardiology',
+                                     DRG_DESC == 'Orthopedic' ~ 'Orthopedic',
+                                     TRUE ~ 'Others')) %>% 
+  arrange (desc(mean)) %>% 
+  slice(1:3, 11:14, 20:23) %>% 
+  ggplot () +
+  aes (x = reorder (DRG_DESC, +mean), y=mean,  fill = Interest_Group) +
+  geom_bar (stat = "identity", position = "dodge") +
+  coord_flip() +
+  labs (x = " ", y = "Average LOS",
+        title = "Average Length of Stay by DRG Group") +
+  geom_text(aes(label = round(mean, 1)), hjust = 0, size = 3)  +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+
+
+## Top 10 disease entities by each group
+### Cardiac
+
+```{r}
+plot1_cardiac = Omega_patient %>% 
+  filter (Interest_Group == "Cardiology") %>% 
+  group_by(Description.1) %>% 
+  summarize (n = n()) %>% 
+  arrange (desc(n)) %>% 
+  slice (1:10) %>% 
+  ggplot() +
+  aes(x = reorder(Description.1, +n), y=n, fill = "lightblue") +
+  geom_bar (stat = "identity") + 
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20)) +
+  coord_flip() +
+  labs (x = " " , y = "Number of treatment",
+        title = "Cardiology") +
+  geom_text(aes(label = n), hjust = 0, size = 3)  +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+### Orthopedic
+
+```{r}
+plot2_ortho = Omega_patient %>% 
+  filter (Interest_Group == "Orthopedic") %>% 
+  group_by(Description.1) %>% 
+  summarize (n = n()) %>% 
+  arrange (desc(n)) %>% 
+  slice (1:10) %>% 
+  ggplot() +
+  aes(x = reorder(Description.1, +n), y=n, fill = "lightblue") +
+  geom_bar (stat = "identity") + 
+  coord_flip() +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 20)) +
+
+  labs (x = " " , y = "Number of treatment",
+        title = "Orthopedics") +
+  geom_text(aes(label = n), hjust = 0, size = 3)  +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+
+```{r}
+ggarrange (plot1_cardiac, plot2_ortho) + ggtitle ("Top 10 Disease Entity")
+```
+
+## Disposition (Destination of patient after hospital discharge)
+### Cardiac & Orthopedic
+```{r}
+Omega_patient %>% 
+  group_by(Interest_Group, DISPOSTN_DESC) %>% 
+  summarize (n = n()) %>% 
+  mutate (percent = n/sum(n) * 100) %>% 
+  arrange (desc(n)) %>% 
+  slice (1:5) %>% 
+  mutate (DISPOSTN_CAT = case_when(DISPOSTN_DESC == 'HOME/ROUTINE' ~ 'HOME/ROUTINE',
+                                   DISPOSTN_DESC == 'HOME HEALTH CARE OR HOME HOSPICE CARE' ~ 'CARE FACILITY',
+                                   DISPOSTN_DESC == 'SKILLED NURSING FACILITY' ~ 'CARE FACILITY',
+                                   DISPOSTN_DESC == 'INTERMEDIATE CARE FACILITY' ~ 'CARE FACILITY',
+                                     TRUE ~ 'DIED')) %>% 
+  ggplot () +
+  aes (x = reorder (DISPOSTN_CAT, +percent), y = percent, fill = Interest_Group)+
+  geom_bar (stat = "identity", position = "dodge") +
+  labs (x = " ", y = "Percentage",
+        title = "Destination of patient after being discharged (%)") +
+  guides(fill = guide_legend(title = "DRG Group")) +
+  theme_minimal() 
+```
+
+
+### Death Rate
+#### Cardiac vs Orthopedic
+***Overall Death Rate ***
+```{r}
+death_rate <- distinct_omega %>%
+  filter(DISPOSTN_DESC == "DIED") %>%
+  group_by(Interest_Group) %>%
+  summarize(n = n()) %>%
+  mutate("% of total patient" = round(n/length(distinct_omega$PAT_NO)*100, 2)) %>%
+  rename("DRG Group" = "Interest_Group",
+         "No.Patient" = "n",
+         "% of Total Patient within the Department" = "% of total patient")
+
+flextable (death_rate)
+
+distinct_omega%>% 
+  group_by(Interest_Group, DISPOSTN_DESC) %>% 
+  summarize (n = n()) %>% 
+  filter (DISPOSTN_DESC == "DIED") %>% 
+  mutate ("% of total patient" = n/length(distinct_omega$PAT_NO)*100) %>% 
+  ggplot ()+
+  aes (x = Interest_Group, y = `% of total patient`, fill = Interest_Group)+
+  geom_bar (stat = "identity", position = "dodge") +
+  labs (x = " ", y = "Percentage",
+        title = "Death Rate (Cardiac vs Orthopedic)") +
+  guides(fill = guide_legend(title = "DRG Group")) +
+  theme_minimal() 
+```
+
+***Death Rate***
+```{r}
+n_patient = 
+  distinct_all %>% 
+  group_by(DRG_DESC) %>% 
+  summarize (n= n())
+death_rate1 = distinct_all%>% 
+  mutate (died_OR = if_else (DIED_IN_OR == 1, DIED_IN_OR, 0)) %>% 
+  group_by(DRG_DESC) %>% 
+  summarize (n_died_OR = sum(died_OR)) %>% 
+  right_join(n_patient) %>% 
+  mutate (DeathRate_OR = n_died_OR/n * 100)
+
+death_rate2 = distinct_all%>% 
+  mutate (died_48 = if_else (DIED_WI_48 == 1, DIED_WI_48, 0)) %>% 
+  group_by(DRG_DESC) %>% 
+  summarize (n_died_48 = sum(died_48)) %>% 
+  right_join(death_rate1) %>% 
+  mutate (DeathRate_48 = n_died_48/n * 100)
+
+death_rate3 = distinct_all%>% 
+  mutate (died_PSTOP = if_else (DIED_PSTOP == 1, DIED_PSTOP, 0)) %>% 
+  group_by(DRG_DESC) %>% 
+  summarize (n_died_PSTOP = sum(died_PSTOP)) %>% 
+  right_join(death_rate2) %>% 
+  mutate (DeathRate_PSTOP = n_died_PSTOP/n * 100)
+
+overall_death_rate = subset (death_rate3, select= -(c(n, n_died_OR, n_died_48, n_died_PSTOP)))
+
+overall_death_rate_final =
+  overall_death_rate %>% 
+  gather(key = death_cat, value = death_rate, c(2:4)) %>% 
+  mutate (Interest_Group = case_when(DRG_DESC == 'Cardiology' ~ 'Cardiology',
+                                     DRG_DESC == 'Orthopedic' ~ 'Orthopedic',
+                                     TRUE ~ 'Others') )
+```
+
+***Death Rate Plot***
+```{r}
+overall_death_rate_final %>% 
+  arrange(desc(death_rate)) %>% 
+  slice(1:15) %>% 
+  ggplot() +
+  aes(x = death_rate, y = reorder(DRG_DESC, +death_rate), fill = Interest_Group) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ death_cat, scales = "free_x", labeller = labeller(death_cat = c("DeathRate_48" = "Within 48h", "DeathRate_OR" = "In OR", "DeathRate_PSTOP" = "Post Operatively"))) +
+  guides(fill = guide_legend(title = "DRG Group")) +
+  xlim(c(0, 2)) +
+  labs(x = "Death Rate", y = " ", title = "Death Rate (%)") +
+  geom_text(aes(label = round(death_rate, 2)), hjust = 0, size = 3)  +
+  theme(plot.background = element_rect(color = "black", size = 0.5)) +
+  theme_minimal()
+```
+
+
+
+
